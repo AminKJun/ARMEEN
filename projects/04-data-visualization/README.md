@@ -1,4 +1,4 @@
-# 04 - Data Visualization & Insights
+#  Data Visualization & Insights
 
 *Coming Soon*
 
