@@ -47,7 +47,7 @@ Banks and financial institutions process thousands of loan applications daily. M
 - **3% False Approval Rate** - Low risk of bad loans
 
 
-## 💡 Impact
+## Impact
 
 **Business Benefits:**
 -  **2,880x Faster** - 2-3 days → <1 second
