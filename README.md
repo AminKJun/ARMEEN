@@ -2,7 +2,7 @@
 
 Welcome! I'm a Data Analyst and ML/AI Consultant specializing in building predictive models and data-driven insights for business impact.
 
-## 👨‍💼 About Me
+## About Me
 
 **AI & Data Consultant | Biomedical Sciences & AI Background**
 
