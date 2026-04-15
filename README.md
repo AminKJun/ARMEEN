@@ -21,11 +21,8 @@ I specialize in applying machine learning and data analysis to solve real-world 
 
 ## 📊 Portfolio Projects
 
-### Predictive & Forecasting Models**
-- [Loan Approval Prediction System](./Predictive_Data_Analysis.ipynb) 
-
 ### Predictive & Forecasting Models
-- [Project 1](link-to-your-project-1)
+- [Loan Approval Prediction System](./Predictive_Data_Analysis.ipynb) 
 - [Project 2](link-to-your-project-2)
 
 ### Quantitative Analysis & Statistical Methods
