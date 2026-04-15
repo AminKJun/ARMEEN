@@ -1,35 +1,23 @@
-# Hi, I'm Armeen 👋
+# Amin K Jun's Portfolio Hub
 
-**AI & Data Consultant | Biomedical Sciences & AI Background**
+Welcome to my professional portfolio hub where you can explore my projects categorized into various domains of data science and analytics.
 
-I specialize in applying machine learning and data analysis to solve real-world problems in **pharma**, **healthcare** and **regulated industries**. With a Master's in AI and a background in Biomedical Sciences, I bridge technical expertise with strategic problem-solving.
+## Project Categories
 
+### Predictive & Forecasting Models
+- [Project 1](link-to-your-project-1)
+- [Project 2](link-to-your-project-2)
 
-## 🎯 What I Do
+### Quantitative Analysis & Statistical Methods
+- [Project 3](link-to-your-project-3)
+- [Project 4](link-to-your-project-4)
 
-- **Data Analysis & Predictions:** Building ML/DL models for insights and forecasting
-- **AI Consulting:** Translating complex AI solutions into business value
-- **Strategy & Insights:** Making data-driven recommendations for decision-makers
+### Time Series Analysis & Forecasting
+- [Project 5](link-to-your-project-5)
+- [Project 6](link-to-your-project-6)
 
-## 🛠️ Skills & Tools
+### Data Visualization & Insights
+- [Project 7](link-to-your-project-7)
+- [Project 8](link-to-your-project-8)
 
-**Languages:** Python, R, SQL  
-**AI/ML Frameworks:** TensorFlow, PyTorch, Scikit-learn, Keras  
-**Specialties:** Machine Learning, Deep Learning, Predictive Analytics, Data Visualization  
-**Industries:** Pharma, Healthcare, Legal, Consulting
-
-## 📂 Featured Projects
-
-🚧 *Portfolio projects coming soon, showcasing end-to-end ML solutions for pharma, healthcare and business analytics.*
-
-
-## 📫 Let's Connect
-
-- **GitHub:** [@AminKJun](https://github.com/AminKJun)
-- **Portfolio:** [aminkjun.github.io](https://aminkjun.github.io/AminKJun) *(coming soon)*
-- **Location:** London, UK | Open to opportunities in London
-
-
-💡 *Currently building a portfolio of real-world AI/ML projects for consulting and data analyst roles. Open to collaborations and opportunities!*
-
-
+Feel free to explore each category for more details on the projects!
