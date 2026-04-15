@@ -67,7 +67,5 @@ Banks and financial institutions process thousands of loan applications daily. M
 Python | Pandas | NumPy | Scikit-learn | Matplotlib | Seaborn | Google Colab | Jupyter
 
 
-**Status:** ✅ Complete | **Completion:** 100% | **Difficulty:** ⭐⭐⭐ Medium
-
 [🔗 View Full Notebook](../../Predictive_Data_Analysis.ipynb)
 
