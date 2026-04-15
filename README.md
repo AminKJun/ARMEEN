@@ -19,7 +19,7 @@ I specialize in applying machine learning and data analysis to solve real-world 
 - **Specialties:** Machine Learning, Deep Learning, Predictive Analytics, Data Visualization
 - **Industries:** Pharma, Healthcare, Legal, Consulting
 
-## 📊 Portfolio Projects
+## Portfolio Projects
 
 ### Predictive & Forecasting Models
 - [Loan Approval Prediction System](./Predictive_Data_Analysis.ipynb) 
