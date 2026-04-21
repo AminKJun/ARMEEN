@@ -4,7 +4,7 @@ Welcome! I'm a Data Analyst and ML/AI Consultant specializing in building predic
 
 ## About Me
 
-**AI & Data Consultant | Biomedical Sciences & AI Background**
+**AI & Data Consultant: Biomedical Sciences & AI Background**
 
 I specialize in applying machine learning and data analysis to solve real-world problems in **pharma**, **healthcare**, and **regulated industries**.
 
