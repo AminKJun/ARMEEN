@@ -1,0 +1,636 @@
+
+# Loading the appropriate libraries 
+library(GGally)    # For exploring relationships between variables
+library(validate)  # For checking data quality consistency
+library(dplyr)     # For data transformation
+library(ggplot2)   # For visualizations
+library(tidyverse) # Collection of R packages
+library(stringr)   # String manipulation
+library(randomForest) # Random forest models
+library(glmnet)   # Linear and logistic regression models
+library(scales) # Formatting prices
+library(reshape2)
+library(Amelia)
+library(rlang)
+library(car)  # For VIF
+library(pROC)
+library(caret)
+
+```
+# 1. Organise and clean the data
+
+```{r}
+load("rental-analysis-data.Rda")
+# Now subset the rentals data set
+# Pick every 40th observation starting from your offset
+# Put into your data frame named mydf (you can rename it)
+mydf <- rentals.analysis[seq(from=SIDoffset,to=nrow(rentals.analysis),by=40),]
+view(mydf)
+```
+
+
+```{r}
+save(mydf, file = "subset_dataset.Rda") # save the subset 
+```
+
+## 1.2 Data quality analysis plan
+
+1. Data Structure Verficiation: Use str(mydf) to view the data entries and Ensure accurate data types. 
+
+2. Accuracy: Ensure clarity and correct misspellings as well as abnormalities and duplicates  
+
+3. Missing values: Ensure data completeness by using sum(is.na()) and colSums(is.na()) to identify numerical. 
+
+4. Descriptive Statistics: Impute summary() to generate mean, median, quartiles, min, max for numercial and frequency distribution for categorical.
+
+5.Anomalies: Detect outliers in numercial variables using boxplot(). This helps in identifying data points that differ significantly from the norm.
+
+## 1.3 Data quality analysis findings
+Imputing data quality plan for all the variables to Find the issues 
+
+# 1.**Data structure Verification**
+```{r}
+# 1. Displays data types and structures for all variables are verified from the subset 
+str(mydf)
+sapply(mydf, class) # Check if categorical variables are treated as factors
+```
+```{r}
+# 2. Identify Spelling errors 
+table(mydf$property_type) # Identify the property names for categorical data 
+table(mydf$instant_booking)
+table(mydf$cancellation_policy)
+table(mydf$cleaning_fee)
+```
+```{r}
+# 3.Check for missing values specific to the variables.
+total_missing <- sum(is.na(mydf))
+missing_by_column <- colSums(is.na(mydf))
+print(missing_by_column)  # Print missing data
+```
+```{r}
+# 3.1 Check for duplicates
+duplicates <- sum(duplicated(mydf))
+print(duplicates)
+```
+```{r}
+# 3.2 View Abnormalities in complete subset present 
+mydf %>% 
+  filter (!complete.cases(.))  %>% # used to access all the variables incomplete cases
+ view()
+```
+```{r}
+# 4.Compose descriptive statistics for numerical variables and frequency count for categorical variables
+summary(mydf)
+
+# 6. Outliers are detected using boxplot
+numerical_vars <- c("price", "no_guests", "bathrooms", "number_reviews", "rating", "bedrooms")
+for (var in numerical_vars) {
+  plot_title <- paste("Boxplot of", var)
+  p <- ggplot(mydf, aes(x = "", y = .data[[var]])) + 
+    geom_boxplot() + 
+    labs(title = plot_title, x = "", y = var)
+  print(p)}
+```
+## 1.4 Data cleaning  
+
+Below shows the analysis conducted in 1.3
+
+1. The subset has 212 rows and 13 column and datatypes are as following: 
+id: integer
+price: numeric
+property_type: factor
+no_guests: numeric
+bathrooms: numeric
+instant_booking: factor
+cleaning_fee: factor
+number_reviews: numeric
+rating: numeric
+bedrooms: numeric
+cancellation_policy: factor
+cancellation_policy_ind: factor
+host_since: numeric
+price_standardized: numeric
+price_display: character
+number_of_guests: numeric
+
+2. Following is the data gained 
+>property_type
+Apartment: 138
+Condominium: 25
+Condominum (misspelled): 3
+House: 46
+
+>Instant_booking
+f (false): 142
+t (true): 70
+
+>Cleaning_fee
+False: 63
+True: 149
+
+>Cancellation_policy
+Flexible or Moderate: 125
+Strict: 87
+
+3. 51 missing values in the rating column. No other columns have missing values. Alternatively: missing_values <- sapply(mydf, function(x) sum(is.na(x))) missing_values[missing_values > 0] can be used to  display columns with missing values
+
+3.1 No Dulpicates 
+3.2 Rating confirms 51 missing, 
+4. There are non whole numbers in bathroom and negative 3 values of -1. 
+5. No odd outliers found but there are out of range values such as 3 for price and 6 for no_guests. standardise numerical 
+
+**Imputation**
+
+
+6. **Data Standardisation**: 
+'Price' had a non-standard format, identified through summary statistics. Standardised using z-scores to normalise the data and created a separate variable to retain the original 'price'.
+
+
+```{r}
+#1. **Incorrect Data Types**: 
+# Converted character variables to factors
+mydf$cleaning_fee <- as.factor(mydf$cleaning_fee) # Binary variable to categorical 
+mydf$instant_booking <- as.factor(mydf$instant_booking)
+mydf$cancellation_policy <- as.factor(mydf$cancellation_policy)
+mydf$cancellation_policy_ind <- as.factor(mydf$cancellation_policy_ind) # second binary dependent variable
+mydf$property_type <- as.factor(mydf$property_type)
+
+#2.  **Inconsistancy**
+
+# Correct misspelled values
+mydf$property_type[mydf$property_type == "Condominum"] <- "Condominium"
+```
+```{r}
+# 3. **Missing Values**: 
+# Replace the 'NA' with a median as the data seems right-skewered distributed and it can fit better with the data rather than using mean.
+
+rating_median <- median(mydf$rating, na.rm = TRUE) #Calculate the median
+mydf <- mydf %>% # Change 'NA' values in 'rating' with the median
+  mutate(rating = ifelse(is.na(rating), rating_median, rating))
+
+# Check to see if there are anymore 'NA' in the rating
+missing_by_column <- sapply(mydf, function(x) sum(is.na(x))) 
+print(missing_by_column)
+```
+```{r}
+# 4. **Negative Values**: 
+# Set 3 negative values in 'bathrooms' to zero, and rounded 'bedrooms' to whole numbers. Addressed anomalises seen via boxplot
+
+# Identify and correct negative bathroom values
+median_bathrooms <- median(mydf$bathrooms[mydf$bathrooms > 0], na.rm = TRUE)
+mydf$bathrooms[mydf$bathrooms < 0] <- median_bathrooms
+
+# Normalise the data to <0; Round the 'bathrooms' values to the nearest integer to ensure data consistency
+mydf <- mydf %>% mutate(bathrooms = round(bathrooms))
+
+# Recheck 
+print(summary(mydf$bathrooms))
+```
+```{r}
+#5 # Standardize numeric columns as they look skewed and cause discripancies 
+numeric_columns <- sapply(mydf, is.numeric)
+
+standardized_mydf <- mydf
+standardized_mydf[numeric_columns] <- as.data.frame(scale(mydf[numeric_columns]))
+
+# Verify standardization
+standardized_summary <- data.frame(
+  Mean = sapply(standardized_mydf[numeric_columns], mean),
+  SD = sapply(standardized_mydf[numeric_columns], sd)
+)
+
+print(standardized_summary)
+```
+```{r}
+#5.1 **Outliers**: removed using the IQR method as observed for no_reviews and Rating. Boxplots were used instead of scatterplots for clear identification of outliers.
+remove_outliers <- function(df, var) {
+  Q1 <- quantile(df[[var]], 0.25, na.rm = TRUE)
+  Q3 <- quantile(df[[var]], 0.75, na.rm = TRUE)
+  IQR <- Q3 - Q1
+  if (IQR == 0) return(df)
+  lower_bound <- Q1 - 1.5 * IQR
+  upper_bound <- Q3 + 1.5 * IQR
+  df %>% filter(df[[var]] >= lower_bound & df[[var]] <= upper_bound)
+}
+
+# List of numerical variables excluding 'price' as its dependent variable
+numerical_vars <- c("no_guests", "bathrooms", "number_reviews", "rating", "bedrooms")
+
+# Handle outliers separately to avoid errors and exclusion of necessary values
+for (var in numerical_vars) {
+  mydf <- remove_outliers(mydf, var)
+}
+
+# Plot boxplots
+plots <- lapply(numerical_vars, function(var) {
+  ggplot(mydf, aes(x = "", y = .data[[var]])) +
+    geom_boxplot() +
+    labs(title = paste("Boxplot of", var))
+})
+
+# Display the plots
+for (plot in plots) {print(plot)}
+head(mydf
+     )
+```
+```{r}
+#Check finally for the data cleaned 
+str(mydf)         
+summary(mydf)           # Cleaned Data Summary
+colSums(is.na(mydf))    # Check for any remaining Missing Values
+```
+### General Observations
+All visible data quality issues were addressed and double-checked by other imputations. 
+
+
+# 2. Exploratory Data Analysis (EDA)
+
+## 2.1 EDA 
+
+For Understand the distribution and trends between the variables The EDA of the subset'mydf' can be approached as follows:
+ 
+1. **Univariate Analysis:**
+
+1.1 Summary Statistics: Compute summary statistics using summary(), mean() and sd(). Standardise for effective analysis of each variable.
+1.2 Observe the distribution of numerical values using histograms 'ggplot2'. 
+1.3 Use frequency bar plots for categorical variables.
+
+2. **Multivariate Analysis:** 
+
+2.1 Correlation Matrix: Use cor() to analyse linear relationships between 'price' and numerical variables.
+
+2.2 Use scatter plots to explore relationships between numerical variables and 'price'.
+
+2.3 Categorical Variables: Examine categorical variables bar charts and boxplots to understand their impact on 'price'.
+
+3. Dependent variable Analysis:
+Understand the interaction between 'price' and 'cancellation_policy_ind'(multivariate)
+
+4.Outlier Detection:
+Identify outliers using statistical methods.(univariate) 
+
+5. Missing Data Assessment:
+Summarise missing values with colSums(is.na()) and visualise missing data patterns to ensure completeness if needed. 
+
+
+## 2.2 EDA execution   
+We explore data visualisation codes.This will provide a structured approach to understanding the subset ‘mydf’.
+
+Reporting Observations from the whole EDA explaining the uses of the observational data for analysis in 2.3. Each area of EDA is accompanied by both graphical representations and code chunk text used to organise and keep the data uniform.
+
+ **1. Univariate Analysis-Statistics**
+```{r}
+#1.1 Basic statistics for numerical variables
+summary(mydf)
+str(mydf)
+```
+Standard Deviation and Mean to check for normal distribution 
+```{r}
+# List of numerical variables before standard deviation'sd'
+numerical_vars <- c("price", "no_guests", "bathrooms", "number_reviews", "rating", "bedrooms")
+# impute the list to store the results for each variable
+means <- list()
+sds <- list()
+
+# Calculate mean and standard deviation for each  numercial variable 'var'
+for (var in numerical_vars) {
+  mydf[[var]] <- as.numeric(as.character(mydf[[var]]))
+  means[[var]] <- mean(mydf[[var]], na.rm = TRUE) 
+  sds[[var]] <- sd(mydf[[var]], na.rm = TRUE)
+}
+# Print the results
+cat("Mean and Standard Deviation for Numerical Variables:\n")
+for (var in numerical_vars) {
+  cat(var, "- Mean:", means[[var]], "SD:", sds[[var]], "\n")
+}
+```
+1.2 Visualisation
+```{r}
+# Create a histogram to represent numeric variables 
+## List of numerical variables
+numerical_vars <- c("price", "no_guests", "bathrooms", "number_reviews", "rating", "bedrooms")
+
+numeric_columns <- mydf %>% select_if(is.numeric) %>% colnames()
+
+for (col in numeric_columns) {
+  print(ggplot(mydf, aes_string(col)) + 
+          geom_histogram(binwidth = 0.5, fill = "skyblue", color = "black") + 
+          labs(title = paste("Histogram of", col), x = col, y = "Frequency"))
+}
+
+```
+1.3 Proportion Frequency Bar Chart 
+```{r}
+# Proportion_table for catagorical variables
+## Used to understand binary data better. 
+create_proportion_table <- function(mydf) {
+  binary_vars <- sapply(mydf, function(x) is.factor(x) && length(levels(x)) == 2)
+  binary_data <- mydf[, binary_vars, drop = FALSE]
+
+  for (col in colnames(binary_data)) {
+    prop_table <- prop.table(table(binary_data[[col]]))
+    
+    # Print the proportion table
+    cat("\nProportion Table for", col, ":\n")
+    print(prop_table)
+    
+    # Plot the proportion table
+    barplot(prop_table, main = paste("Proportion Table for", col), ylab = "Proportion")
+  }
+}  # As an example 
+create_proportion_table(mydf)
+```
+**2. Multivariate Analysis**
+```{r}
+#2.1 Calculate the correlation matrix for numerical columns
+cor_matrix <- cor(mydf[, sapply(mydf, is.numeric)], use = "complete.obs")
+
+# Melt the correlation matrix to convert thheh matrix to longer format for the plot
+cor_matrix_melted <- melt(cor_matrix)
+
+# Create the heatmap
+ggplot(cor_matrix_melted, aes(x = Var1, y = Var2, fill = value)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "blue", high = "red", mid = "white", midpoint = 0, limit = c(-1, 1), name = "Correlation") +
+  labs(title = "Correlation Matrix Heatmap", x = "", y = "") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_fixed()
+```
+2.2 Scatter plots for 'price' vs numeric variables
+
+```{r}
+for (col in numeric_columns) {
+  print(ggplot(mydf, aes_string(x = col, y = "price")) + 
+          geom_point(color = "black") + 
+          labs(title = paste("Scatter Plot of Price and", col), x = col, y = "Price"))
+}
+
+```
+2.3 Box plots for 'price' vs categorical variable
+```{r}
+categorical_vars <- c("property_type", "instant_booking", "cleaning_fee", "cancellation_policy")
+for (var in categorical_vars) {
+  print(ggplot(mydf, aes_string(x = var, y = "price")) +
+    geom_boxplot(fill = "purple") +
+    labs(title = paste("Boxplot of Price by", var), x = var, y = "Price") +theme_minimal() +  # Apply minimal theme for clarity
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)))
+  }# Rotate x-axis labels for better readability
+```
+```{r}
+#Bar chart for 'property_type' vs 'cancellation_fee' to see the effect
+
+ggplot(mydf, aes(x = property_type, fill = as.factor(cancellation_policy))) + 
+  geom_bar(position = "dodge") +
+  labs(title = "Property Type by Cancellation Policy", x = "Property Type", y = "Count") +
+  theme(axis.text.x = element_text(angle = 90))
+```
+**3. Dependent variable Analysis**
+```{r}
+# Boxplot for 'price' by 'cancellation_policy_ind' to compare both dependent variables
+ggplot(mydf, aes(x = factor(cancellation_policy), y = price)) + 
+  geom_boxplot(fill ="skyblue") +
+  labs(title = "Boxplot of Price by Cancellation Policy Indicator", x = "Cancellation Policy Indicator", y = "Price")
+```
+**4. Outlier Detection**
+```{r}
+# Boxplot for outliers in 'price'  
+ggplot(mydf, aes(y = price)) + 
+  geom_boxplot() +
+  labs(title = "Boxplot of Price", y = "Price")
+```
+**5. Missing Data Check**
+```{r}
+# Check for missing data
+missing_values <- colSums(is.na(mydf))
+View(mydf)
+```
+
+## 2.3 EDA summary of results
+
+1. Univariate Analysis:
+The average nightly rental price is approximately $5.03 with low variability (SD: 0.84). Other variables like the number of reviews show higher variability, ranging from 7 to 32 reviews per property. Most properties feature 1 bedroom and 0 or 1 bathroom, suggesting limited variation in these attributes. The price histogram reveals a right-skewed distribution, with most properties priced in the mid-range and a few high-priced outliers. Histograms for the number of guests, bathrooms, and bedrooms show that most properties cater to a small number of guests and typically feature 1-2 bathrooms and 2-3 bedrooms.
+
+Categorical Variables: Bar charts indicate that 70% of properties do not offer instant booking, requiring manual arrangements. About 68% of properties lack a specific cancellation policy, suggesting non-standardized or absent policies.
+
+2. Multivariate Analysis: Scatter plots and the heatmap reveal key trends between numercial and target variable:
+
+Guest Capacity: Higher guest capacity correlates with higher prices.
+Bathrooms and Bedrooms: More bathrooms and bedrooms are associated with higher property prices.However, There is a negative correlation between the number of reviews and price, suggesting that higher-priced properties may receive fewer reviews.
+Ratings: Ratings do not strongly correlate with price, indicating that higher ratings alone do not drive higher prices. Older properties generally have higher prices, possibly due to appreciation or reputation.
+
+Boxplot Analysis- Numerical target and Independent categorical: Properties with flexible cancellation policies generally have lower prices and fewer high-priced outliers. In contrast, strict cancellation policies are linked to a larger price range and more significant high-priced outliers.
+
+Dependent Variables- Barchart: Property Type and Cancellation Policy: Apartments are the most common property type and predominantly offer flexible cancellation policies. This pattern raises questions about the influence of property type on cancellation policies and may reflect broader market trends or gaps in policy implementation.
+
+## 2.4 Additional insights and issues
+
+Price and Cancellation Policy: The boxplot analysis shows that properties with strict cancellation policies have a broader price range, including more high-priced outliers, while those with flexible policies generally have lower prices and fewer outliers. This suggests that stricter policies might be associated with higher-quality properties or premium pricing strategies.
+
+Data Quality and Completeness: The dataset is free from missing values but required adjustments for anomalies in bedroom and bathroom counts. These corrections are crucial for accurate analysis and underscore the importance of data validation. 
+
+*Future Research Directions:*
+
+Cancellation Policies: Further exploration of cancellation policy variations across property types could provide insights into market practices.
+
+Price Outliers: Understanding factors behind price outliers may refine pricing strategies and data accuracy as the price formatted is not the best to work with even when standardised.
+
+Overall, addressing these aspects will enhance the robustness of the analysis and provide a clearer understanding of the data. 
+
+# 3. Modelling
+
+## 3.1 Explain your analysis plan
+
+1. Objective: Model rental prices using the cleaned dataset and EDA findings.
+2. Impute missing values 
+3. Building the Model and Train : fit a Multivariate linear regression model. Train the model with cross validation. 10-fold cross-validation will be used to assess the model's performance. 
+4. goodness of fit: Use R-squared to know the performance of the model. Also examine the coefficient to see the impact of the predictor on rental price. 
+Plot residuals to check for homoscedasticity (constant variance) and normality. 
+5. Revaluation: After initial modelling, assess the performance of the model. If necessary, reconsider the choice of predictor or adjust the model based on diagnostic findings.
+
+## 3.2 Build a model for rental price
+
+```{r}
+
+# Impute missing values for all numerical columns with the median
+num_cols <- sapply(mydf, is.numeric)
+mydf[num_cols] <- lapply(mydf[num_cols], function(x) {
+  x[is.na(x)] <- median(x, na.rm = TRUE)
+  return(x)
+})
+```
+```{r}
+# Build and summarise the linear regression model using all numerical variables
+model <- lm(price ~ ., data = mydf)
+summary(model)
+
+# Plot residuals
+par(mfrow = c(2, 2))
+plot(model)
+```
+
+```{r}
+# Print additional metrics
+cat("Residual standard error:", summary(model)$sigma, "\n")
+cat("R-squared:", summary(model)$r.squared, "\n")
+
+# Plot residuals to check for homoscedasticity and normality
+# Residuals vs Fitted values plot
+plot(model$fitted.values, residuals(model), 
+     main="Residuals vs Fitted", 
+     xlab="Fitted values", 
+     ylab="Residuals")
+abline(h = 0, col = "red")
+
+# Q-Q plot for residuals visualisation
+qqnorm(residuals(model))
+qqline(residuals(model), col = "red")
+
+# Add residual standard error and R-squared to output for clarity not always needed. 
+cat("Residual standard error:", summary(model)$sigma, "\n")
+cat("R-squared:", summary(model)$r.squared, "\n")
+
+```
+This model overviews relationship between rental price and the other variables 
+
+
+## 3.3 Critique model using relevant diagnostics
+
+### Interpretation of the Model
+
+#### **Model Fit and Goodness of Fit**:
+
+ **R-squared**: 0.459 shows that approximately 46% of the variability in rental prices. This suggests that while the model accounts for some of the variation in rental prices, additional factors might be influencing the prices that are not included in the model.
+
+**Residual Standard Error**: 0.622 represents the average number of observed rental prices from the model's predictions.The model's predictions are reasonably. 
+
+#### **Graphical Diagnostics**:
+
+- **Residuals vs. Fitted Values**: The plot shows residuals scattered randomly around the horizontal line at zero, suggesting that the model meets the linearity. This random scatter indicates that there are no systematic patterns in the residuals, which is a positive sign for the model.
+
+- **Q-Q Plot**: The residuals mostly follow the red line, indicating that they are normally distributed. However, they are off the line at both ends of the plot, suggesting minor discripency. While these deviations are relatively small, they could affect the reliability of hypothesis tests and confidence intervals.
+
+#### **Potential Weaknesses**:
+
+1. **Model Fit**: The R-squared value of 0.459 indicates that nearly 54% of the variability in rental prices is not explained by the model.
+
+2. **Residual Standard Error**: Although the error is small, Model might not fully account for all factors influencing rental prices.
+
+3. **Residual Deviations**: Further model anlaysis, such as transformations could enhance the model's fit and accuracy.
+
+In summary, the model demonstrates a moderate fit and adheres to linearity and homoscedasticity, but further analysis is needed to address the unexplained variability and minor deviations from normality. 
+
+## 3.4 Suggest and implement improvements to your model
+
+**Alternative Approach and Model Proposal**
+
+To tackle the model’s weaknesses, we can consider switching to Lasso Regression. This method adds regularisation to control for issues like multicollinearity and overfitting, making it more robust and potentially improving prediction accuracy. Lasso can automatically select the most relevant predictors and making it easier to interpret.It is a  better choice compared to the original linear model because it addresses issues with multicollinearity and simplifies the predictor set. This should lead to a more precise and understandable model for rental prices. Another approach is to do feature selection using VIF as it is able to assess multicollinearity among predictors. It can combine predictors with high VIF values to enhance model stability and predictive power.
+```{r} #Example 
+# Calculate VIF for each predictor 
+vif_values <- vif(model)
+print(vif_values)
+
+```{r}
+#1.  Ensure the target variable is a factor with two levels only 
+mydf$cancellation_policy_ind <- as.factor(mydf$cancellation_policy_ind)
+
+# Split the data into training and testing sets for optamisation
+set.seed(123)
+train_index <- createDataPartition(mydf$cancellation_policy_ind, p = 0.8, list = FALSE)
+train_data <- mydf[train_index, ]
+test_data <- mydf[-train_index, ]
+
+# Standardize independent variable
+preProc <- preProcess(train_data[, -which(names(train_data) == "cancellation_policy_ind")], method = c("center", "scale"))
+train_data_scaled <- predict(preProc, train_data)
+test_data_scaled <- predict(preProc, test_data)
+```
+```{r}
+
+# Train logistic regression model
+model_logistic <- glm(cancellation_policy_ind ~ ., data = train_data_scaled, family = binomial)
+
+# Check multicollinearity
+vif(model_logistic)
+
+# Cross-validation
+cv_results <- train(cancellation_policy_ind ~ ., data = train_data_scaled, method = "glm", family = "binomial", trControl = trainControl(method = "cv", number = 10))
+print(cv_results)
+
+# Make predictions
+predictions <- predict(model_logistic, newdata = test_data_scaled, type = "response")
+binary_predictions <- ifelse(predictions > 0.5, "1", "0")
+
+# Evaluate metrics
+conf_matrix <- confusionMatrix(as.factor(binary_predictions), test_data_scaled$cancellation_policy_ind)
+print(conf_matrix)
+
+# ROC curve and AUC
+roc_curve <- roc(test_data_scaled$cancellation_policy_ind, predictions)
+plot(roc_curve)
+cat("AUC:", auc(roc_curve), "\n")
+
+# Print model summary
+summary(model_logistic)
+
+```
+
+**Summary:**
+The analysis aimed to predict cancellation_policy_ind using logistic regression with 12 predictors. The model achieved perfect accuracy and kappa values but encountered convergence warnings, indicating possible overfitting.
+
+>1. Converted cancellation_policy_ind to a factor and standardised.
+2. Split the dataset and standardized predictors to enhance model performance.
+3. Logistic regression model trained on scaled data.
+
+##Performance:
+
+Accuracy: 1.00 (perfect predictions)
+Sensitivity: 1.00 (all positives correctly identified)
+Specificity: 1.00 (all negatives correctly identified)
+Precision: 1.00
+AUC: 1.00, indicating perfect discrimination between classes.
+
+###Model Coefficients:
+
+Coefficients are very small, suggesting numerical issues or multicollinearity.
+
+**Recommendations:**
+
+## Address Convergence Issues:
+• Simplify the model by reducing predictors if necessary.
+
+## Cross-Validation:
+• Ensure robust cross-validation and evaluate performance using ROC-AUC, precision, and recall.
+
+## Feature Engineering:
+• Create meaningful interactions or transformations of predictors.
+
+**Proposed Improvement:**
+Regularisation: Implement regularised logistic regression (Ridge or Lasso) to address potential overfitting and stabilize model coefficients.
+```{r}
+
+library(glmnet)
+
+x_train <- as.matrix(train_data_scaled[, -which(names(train_data_scaled) == "cancellation_policy_ind")])
+y_train <- train_data_scaled$cancellation_policy_ind
+
+model_ridge <- cv.glmnet(x_train, y_train, family = "binomial", alpha = 0)
+model_lasso <- cv.glmnet(x_train, y_train, family = "binomial", alpha = 1)
+```
+Conclusion:The logistic regression model performed perfectly on this dataset, but overfitting and numerical stability issues need to be addressed. Regularization and further validation are recommended for improved robustness and generalizability.
+
+
+
+**#References** 
+
+>
+Fisher, A. (2021). Predicting Manhattan Rent with Linear Regression. [online] Medium. Available at: https://towardsdatascience.com/predicting-manhattan-rent-with-linear-regression-27766041d2d9.
+
+> 
+Kassambara, A. (2018). Linear Regression Assumptions and Diagnostics in R - Essentials. STHDA. Retrieved from http://www.sthda.com/english/articles/39-regression-model-diagnostics/161-linear-regression-assumptions-and-diagnostics-in-r-essentials/v
+>
+Madhugiri, D. (2023). Example of Exploratory Data Analysis in Data Science. KnowledgeHut Blog. Retrieved from https://www.knowledgehut.com/blog/data-science/eda-data-science#example-of%C2%A0exploratory-data-analysis%C2%A0
+>
+Phillips, N.D. (2018). YaRrr! The Pirate’s Guide to R. Retrieved from https://bookdown.org/ndphillips/YaRrr/
+>
+Wickham, H. (2016). ggplot2: Elegant Graphics for Data Analysis. Springer-Verlag New York.
